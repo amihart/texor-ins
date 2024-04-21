@@ -23,7 +23,7 @@
 #define TEXOR_TAB_STOP 8
 #define TEXOR_QUIT_TIMES 3
 
-#define CTRL_KEY(k) ((k) & 0x1f)
+#define CTRL_KEY(k) (9999 + k)
 
 enum editorKey {
   BACKSPACE = 127,
@@ -31,6 +31,7 @@ enum editorKey {
   ARROW_RIGHT,
   ARROW_UP,
   ARROW_DOWN,
+  INS_KEY,
   DEL_KEY,
   HOME_KEY,
   END_KEY,
@@ -186,6 +187,7 @@ int editorReadKey() {
         if (seq[2] == '~') {
           switch (seq[1]) {
             case '1': return HOME_KEY;
+            case '2': return INS_KEY;
             case '3': return DEL_KEY;
             case '4': return END_KEY;
             case '5': return PAGE_UP;
@@ -383,12 +385,13 @@ int editorSyntaxToColor(int hl) {
 }
 
 void editorSelectSyntaxHighlight() {
+  unsigned int j;
   E.syntax = NULL;
   if (E.filename == NULL) return;
 
   char *ext = strrchr(E.filename, '.');
 
-  for (unsigned int j = 0; j < HLDB_ENTRIES; j++) {
+  for (j = 0; j < HLDB_ENTRIES; j++) {
     struct editorSyntax *s = &HLDB[j];
     unsigned int i = 0;
     while (s->file_match[i]) {
@@ -460,11 +463,12 @@ void editorUpdateRow(erow *row) {
 }
 
 void editorInsertRow(int at, char *s, size_t len) {
+  int j;
   if (at < 0 || at > E.number_of_rows) return;
 
   E.row = realloc(E.row, sizeof(erow) * (E.number_of_rows + 1));
   memmove(&E.row[at + 1], &E.row[at], sizeof(erow) * (E.number_of_rows - at));
-  for (int j = at + 1; j <= E.number_of_rows; j++) E.row[j].index++;
+  for (j = at + 1; j <= E.number_of_rows; j++) E.row[j].index++;
 
   E.row[at].index = at;
 
@@ -490,10 +494,11 @@ void editorFreeRow(erow *row) {
 }
 
 void editorDelRow(int at) {
+  int j;
   if (at < 0 || at >= E.number_of_rows) return;
   editorFreeRow(&E.row[at]);
   memmove(&E.row[at], &E.row[at + 1], sizeof(erow) * (E.number_of_rows - at - 1));
-  for (int j = at; j < E.number_of_rows - 1; j++) E.row[j].index--;
+  for (j = at; j < E.number_of_rows - 1; j++) E.row[j].index--;
   E.number_of_rows--;
   E.dirty++;
 }
@@ -587,6 +592,24 @@ char *editorRowsToString(int *buflen) {
   return buf;
 }
 
+unsigned char editorPickOption() {
+  unsigned char* opt = editorPrompt("Select Option: %s (ESC to cancel)", NULL);
+  if (opt == NULL)
+  {
+    editorSetStatusMessage("Selection aborted.");
+    return 0;
+  }
+  unsigned char ret = opt[0];
+  if (opt[0] != 0)
+    if (opt[1] != 0)
+      if (opt[0] == 'q' && opt[1] == '!')
+        ret = 'q' + '!';
+      else
+        ret = 0;
+  free(opt);
+  return ret;
+}
+
 void editorOpen(char *filename) {
   free(E.filename);
   E.filename = strdup(filename);
@@ -594,7 +617,7 @@ void editorOpen(char *filename) {
   editorSelectSyntaxHighlight();
 
   FILE *fp = fopen(filename, "r");
-  if (!fp) die("fopen");
+  if (!fp) return;
 
   char *line = NULL;
   size_t linecap = 0;
@@ -699,7 +722,7 @@ void editorFind() {
   int saved_coloff = E.column_offset;
   int saved_rowoff = E.row_offset;
 
-  char *query = editorPrompt("Search, %s (ESC/Arrows/Enter)",
+  char *query = editorPrompt("Search: %s (ESC/Arrows/Enter)",
                              editorFindCallback);
 
   if (query) {
@@ -967,17 +990,26 @@ void editorMoveCursor(int key) {
 void editorProcessKeypress() {
   static int quit_times = TEXOR_QUIT_TIMES;
 
+
   int c = editorReadKey();
+  if (c == INS_KEY)
+  {
+    c = CTRL_KEY(editorPickOption());
+    if (c == 0) CTRL_KEY(0);
+  }
+
 
   switch(c) {
     case '\r':
       editorInsertNewline();
       break;
-
+    case CTRL_KEY(0): break;
     case CTRL_KEY('q'):
+    case CTRL_KEY('q' + '!'):
+      if (c == CTRL_KEY('q' + '!')) quit_times = 0;
       if (E.dirty && quit_times > 0) {
-        editorSetStatusMessage("WARNING!!! File has unsaved changes. "
-          "Press Ctrl-Q %d more times to quit.", quit_times);
+        editorSetStatusMessage("WARNING!!! Unsaved changes. "
+          "Do %d more times to quit (or use q!).", quit_times);
         quit_times--;
         return;
       }
@@ -1073,7 +1105,7 @@ int main(int argc, char *argv[]) {
   }
 
   editorSetStatusMessage(
-      "HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
+      "HELP: Ins-S = save | Ins-Q = quit | Ins-F = find");
 
   while (1) {
     editorRefreshScreen();
@@ -1081,5 +1113,3 @@ int main(int argc, char *argv[]) {
   }
 
   return 0;
-}
-
