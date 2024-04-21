@@ -1,12 +1,6 @@
-# texor
-
-A simple text editor written in C.
-
-I'm following along with a [tutorial](http://viewsourcecode.org/snaptoken/kilo/) to build an editor like [kilo](http://antirez.com/news/108).
-
 # texor-ins
 
-I wanted a text editor on my router which I could only control over serial, and the Ctrl schema wasn't working for me, so I just modified it to use Ins instead and it worked. Decided to create a fork here in case anyone else needs that.
+This is a fork of Texor. I wanted a text editor on my router which I could only control over serial, and the Ctrl schema wasn't working for me, so I just modified it to use Ins instead and it worked. Decided to create a fork here in case anyone else needs that.
 
 ## Compiling
 
